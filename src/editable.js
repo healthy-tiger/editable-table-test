@@ -182,6 +182,15 @@ const ES_IMMEDIATE = 1; // 即時編集モード
 const ES_EDIT = 2; // 編集モード
 
 class EditableTable {
+	/*
+	 * セルのクリックやカーソル移動でキャレット位置が変化する場合は、必ず、セルの中の先頭にキャレットを移動させる。
+	 * そうしないとその後の日本語入力時に文字が入力される位置がずれる。(upDownCursor、leftRightCursor、onclick)
+	 * 
+	 * currentCellの変更はselectionchangeイベントハンドラで行う。他ではしない。
+	 * キャレット位置を変化させるついでにcurrentCellを変えるのもダメ。
+	 * キャレット位置を変更するとselectionchangeイベントが発生してそのイベントハンドラの中で変えるから。
+	 */
+
 	/**
 	 * @param {HTMLElement} container
 	 * @param {Array<string>} colDefs
@@ -209,6 +218,8 @@ class EditableTable {
 
 		this.editState = ES_NONE;
 		this.currentCellStore = '';
+		this.currentCell = null;
+		this.isComposing = false;
 		this.table = main;
 		this.values = values;
 
@@ -220,6 +231,7 @@ class EditableTable {
 		document.addEventListener('selectionchange', evt => this.onSelectionChange(evt));
 		main.addEventListener('focusin', evt => this.onfocusin(evt));
 		main.addEventListener('focusout', evt => this.onfocusout(evt));
+		main.addEventListener('click', evt => this.onclick(evt));
 	}
 
 	/**
@@ -227,9 +239,8 @@ class EditableTable {
 	 */
 	upDownCursor(dir) {
 		const sel = document.getSelection();
-		const current = this.currentCell;
-		const currentrow = current.parentElement;
-		const column = getElementIndex(currentrow, current);
+		const currentrow = this.currentCell.parentElement;
+		const column = getElementIndex(currentrow, this.currentCell);
 		const nextrow = getNthSibling(currentrow, dir);
 		if (nextrow != null) {
 			const nextcell = getNthChild(nextrow, column);
@@ -251,9 +262,8 @@ class EditableTable {
 	 */
 	leftRightCursor(dir) {
 		const sel = document.getSelection();
-		const current = this.currentCell;
-		const currentrow = current.parentElement;
-		const nextcell = getNthChild(currentrow, getElementIndex(currentrow, current) + dir);
+		const currentrow = this.currentCell.parentElement;
+		const nextcell = getNthChild(currentrow, getElementIndex(currentrow, this.currentCell) + dir);
 		if (nextcell != null) {
 			const range = document.createRange();
 			range.setStart(nextcell, 0);
@@ -269,8 +279,7 @@ class EditableTable {
 
 	gotoFirstColumn() {
 		const sel = document.getSelection();
-		const current = this.currentCell;
-		const currentrow = getParentElement(current, 'tr');
+		const currentrow = getParentElement(this.currentCell, 'tr');
 		const range = document.createRange();
 		range.setStart(currentrow.firstElementChild.firstChild, 0);
 		range.collapse(true);
@@ -281,8 +290,7 @@ class EditableTable {
 
 	gotoLastColumn() {
 		const sel = document.getSelection();
-		const current = this.currentCell;
-		const currentrow = getParentElement(current, 'tr');
+		const currentrow = getParentElement(this.currentCell, 'tr');
 		const range = document.createRange();
 		range.setStart(currentrow.lastElementChild.firstChild, 0);
 		range.collapse(true);
@@ -296,33 +304,32 @@ class EditableTable {
 		console.log('startEditing');
 
 		const sel = document.getSelection();
-		const current = this.currentCell;
-		this.currentCellStore = current.innerText;
+		this.currentCellStore = this.currentCell.innerText;
 		if (immediate) {
-			current.innerText = '';
+			this.currentCell.textContent = '';
 			this.editState = ES_IMMEDIATE;
 		} else {
 			this.editState = ES_EDIT;
-
-			const range = document.createRange();
-			if (current.lastChild == null) {
-				range.setStart(current, 0);
-			} else {
-				range.setStart(current.lastChild, current.lastChild.textContent.length);
-			}
-			range.collapse(true);
-
-			sel.removeAllRanges();
-			sel.addRange(range);
 		}
+
+		const range = document.createRange();
+		if (this.currentCell.lastChild == null) {
+			range.setStart(this.currentCell, 0);
+		} else {
+			range.setStart(this.currentCell.lastChild, this.currentCell.lastChild.textContent.length);
+		}
+		range.collapse(true);
+
+		sel.removeAllRanges();
+		sel.addRange(range);
+
 		this.table.classList.add(cellEditingClassName);
 	}
 
 	cancelEditing() {
 		console.log('cancelEditing');
 
-		const current = this.currentCell;
-		current.innerText = this.currentCellStore;
+		this.currentCell.innerText = this.currentCellStore;
 		this.currentCellStore = '';
 		this.editState = ES_NONE;
 		this.table.classList.remove(cellEditingClassName);
@@ -331,13 +338,12 @@ class EditableTable {
 	endEditing() {
 		console.log('endEditing');
 
-		const current = this.currentCell;
-		const newvalue = current.textContent;
+		const newvalue = this.currentCell.textContent;
 		const oldvalue = this.currentCellStore;
-		if (current.textContent !== this.currentCellStore) {
+		if (newvalue !== oldvalue) {
 			console.log('changed');
-			const row = getParentElement(current, 'tr');
-			const columnindex = getElementIndex(row, current);
+			const row = getParentElement(this.currentCell, 'tr');
+			const columnindex = getElementIndex(row, this.currentCell);
 			const tbody = getParentElement(row, 'tbody');
 			const rowindex = getElementIndex(tbody, row);
 
@@ -355,11 +361,6 @@ class EditableTable {
 
 	get editing() {
 		return this.editState === ES_EDIT || this.editState === ES_IMMEDIATE;
-	}
-
-	/** @type {HTMLElement} */
-	get currentCell() {
-		return this.table.querySelector('.' + currentCellClassName);
 	}
 
 	/** @param {KeyboardEvent} evt*/
@@ -391,16 +392,14 @@ class EditableTable {
 
 				if (evt.key === 'ArrowLeft') {
 					const sel = document.getSelection();
-					const current = this.currentCell;
 					// セルの先頭までカーソルが来ていたらそれ以上カーソル移動させない。
-					if (sel.focusNode == current.firstChild && sel.focusOffset == 0) {
+					if (sel.focusNode == this.currentCell.firstChild && sel.focusOffset == 0) {
 						evt.preventDefault();
 					}
 				} else if (evt.key === 'ArrowRight') {
 					const sel = document.getSelection();
-					const current = this.currentCell;
 					// セルの末尾までカーソルが来ていたらそれ以上カーソル移動させない。
-					if (sel.focusNode == current.lastChild && sel.focusOffset == current.lastChild.textContent.length) {
+					if (sel.focusNode == this.currentCell.lastChild && sel.focusOffset == this.currentCell.lastChild.textContent.length) {
 						evt.preventDefault();
 					}
 				} else {
@@ -423,10 +422,9 @@ class EditableTable {
 							{
 								// セルの先頭までカーソルを移動
 								const sel = document.getSelection();
-								const current = this.currentCell;
 
 								const range = document.createRange();
-								range.setStart(current.firstChild, 0);
+								range.setStart(this.currentCell.firstChild, 0);
 								range.collapse(true);
 
 								sel.removeAllRanges();
@@ -437,10 +435,9 @@ class EditableTable {
 							{
 								// セルの末尾までカーソルを移動
 								const sel = document.getSelection();
-								const current = this.currentCell;
 
 								const range = document.createRange();
-								range.setStart(current.lastChild, current.lastChild.textContent.length);
+								range.setStart(this.currentCell.lastChild, this.currentCell.lastChild.textContent.length);
 								range.collapse(true);
 
 								sel.removeAllRanges();
@@ -511,9 +508,14 @@ class EditableTable {
 
 			case ES_NONE: // 非編集モードの処理
 				if (evt.key.length === 1) { // 印字可能なキー
+
 					// 非編集モードで印字可能なキーが押されたら、即時編集モードにする。
 					// 入力されたキーのDOMツリーへの挿入はブラウザまかせ
 					// TODO ctrl,alt,shiftキーが押されていた場合の処理
+
+					// evt.key === 'Process'の場合もstartEditing呼ぶようにしたら、
+					// 一文字目が全角で確定された状態で入力されたのでやめた。
+
 					this.startEditing(true);
 					return;
 				}
@@ -560,40 +562,46 @@ class EditableTable {
 	}
 
 	onSelectionChange(evt) {
-		console.log('onSelectionChange', this.editState, this.editing);
-
 		const sel = document.getSelection();
-		const targetTable = getParentElement(sel.anchorNode, 'table');
+
+		const targetTable = getParentElement(sel.focusNode, 'table');
 		if (targetTable == null || targetTable != this.table) {
 			return;
 		}
-		const targetCell = getParentElement(sel.anchorNode, 'td');
-		if (targetCell == null) {
+
+		if (this.isComposing) {
 			return;
 		}
-		const current = this.currentCell;
-		if (current != null) {
-			if (current != targetCell) {
+
+		console.log('onSelectionChange', this.editState, this.editing, sel.focusOffset);
+
+		const targetCell = getParentElement(sel.focusNode, 'td');
+		if (this.currentCell != null) {
+			if (this.currentCell != targetCell) {
 				if (this.editing) {
 					this.endEditing();
 				}
 			}
-			current.classList.remove(currentCellClassName);
+			this.currentCell.classList.remove(currentCellClassName);
 		}
-		targetCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-		targetCell.classList.add(currentCellClassName);
+		if (targetCell != null) {
+			targetCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+			targetCell.classList.add(currentCellClassName);
+		}
+		this.currentCell = targetCell;
 	}
 
 	onCompositionStart() {
 		console.log('composition start', this.editState, this.editing);
-
+		this.isComposing = true;
 		if (this.editState === ES_NONE) {
 			this.startEditing(true);
 		}
 	}
 
 	onCompositionEnd() {
-		console.log('composition end', this.editState, this.editing);
+		console.log('composition end', this.editState, this.editing, this.currentCell.textContent);
+		this.isComposing = false;
 	}
 
 	onfocusin(evt) {
@@ -601,10 +609,25 @@ class EditableTable {
 	}
 
 	onfocusout(evt) {
-		console.log('focusout');
+		console.log('focusout', this.currentCell.textContent);
 		if (this.editing) {
 			this.endEditing();
 		}
+	}
+
+	onclick(evt) {
+		console.log('onclick', this.editing);
+		if (!this.editing) {
+			const cell = getParentElement(evt.target, 'td');
+			const sel = document.getSelection();
+			const range = document.createRange();
+			range.setStart(cell, 0);
+			range.collapse(true);
+
+			sel.removeAllRanges();
+			sel.addRange(range);
+		}
+		// TODO マウスドラッグによる編集中セル内の選択
 	}
 }
 
