@@ -25,6 +25,10 @@
     outline: solid 0px transparent;
 }
 
+.editable-table td::selection {
+    background-color: transparent;
+}
+
 .editable-table table th,
 td {
     padding: 5pt;
