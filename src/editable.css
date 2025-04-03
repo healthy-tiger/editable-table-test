@@ -1,0 +1,56 @@
+.editable-table {
+    display: grid;
+    grid-template-columns: auto 1fr;
+}
+
+.editable-table>* {
+    margin: 0px;
+    padding: 0px;
+}
+
+.editable-table>.table-body {
+    overflow-x: auto;
+}
+
+.editable-table>.table-body>table {
+    width: 800px;
+}
+
+.editable-table table {
+    border-collapse: collapse;
+    border: solid black 1px;
+}
+
+.editable-table table>tbody {
+    outline: solid 0px transparent;
+}
+
+.editable-table table th,
+td {
+    padding: 5pt;
+    border: solid black 1px;
+}
+
+.editable-table>.row-header>th {
+    font-weight: bold;
+}
+
+.editable-table>.table-body>table>tbody:focus>tr>td.current-cell {
+    background-color: lightcyan;
+}
+
+.editable-table>.table-body>table>tbody>tr>td:focus {
+    outline: solid 0px transparent;
+}
+
+.editable-table>.table-body>table>tbody>tr>td.current-cell:focus {
+    background-color: lightcyan;
+}
+
+.editable-table>.table-body>table:not(.editing)>tbody>tr>td.current-cell:focus {
+    caret-color: transparent;
+}
+
+.editable-table>.table-body>table>tbody>tr>td {
+    overflow-x: auto;
+}

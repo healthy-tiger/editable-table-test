@@ -1,4 +1,3 @@
-import './style.css'
 import { EditableTable } from './editable.js'
 
 const columns = [
@@ -41,7 +40,7 @@ const dogs = [
 ];
 
 const onValueChanged = (value, field, rowindex, columnindex, newvalue, oldvalue) => {
-    console.log(rowindex, columnindex, field, newvalue, oldvalue);
+    console.log(`${rowindex}, ${columnindex}, "${field}", "${newvalue}", "${oldvalue}"`);
 }
 
 const editable = new EditableTable(document.querySelector('#dog-table'), columns, dogs);
