@@ -1,3 +1,5 @@
+import './editable.css'
+
 /**
  * @param {HTMLElement} elm
  * @param {number} offset
@@ -57,20 +59,6 @@ const getElementIndex = (parent, child) => {
 }
 
 /**
- * @param {Selection} sel
- * @param {string} elmname
- * @returns {HTMLElement}
- */
-const getElementAtCaret = (sel, elmname) => {
-	let e = sel.anchorNode;
-	const nm = elmname.toUpperCase();
-	while (e != null && e.nodeName != nm) {
-		e = e.parentElement;
-	}
-	return e;
-}
-
-/**
  * @param {Node} elm
  * @param {string} name
  * @returns {HTMLElement}
@@ -82,93 +70,6 @@ const getParentElement = (elm, name) => {
 		e = e.parentElement;
 	}
 	return e;
-}
-
-/**
- * @param {HTMLElement} tbody
- * @param {Array<string>} colDefs
- * @param {Array<string>} pinnedColumns
- * @param {Object} value
- */
-const createRow = (tbody, colDefs, value) => {
-	const tr = document.createElement('tr');
-	colDefs.forEach(col => {
-		if (!col.pinned) {
-			const td = document.createElement('td');
-			td.innerText = value[col[columnFieldProperty] || col[columnNameProperty] || col];
-			tr.appendChild(td);
-		}
-	});
-	tbody.appendChild(tr);
-}
-/**
- * @param {HTMLElement} table
- * @param {Array<string>} colDefs
- * @param {Array<string>} pinnedColumns
- * @param {Array<Object>} values
- * @returns {HTMLElement}
- */
-const createMainColumns = (colDefs, values) => {
-	const table = document.createElement('table');
-
-	// create thead
-	const tr = document.createElement('tr');
-	colDefs.forEach(col => {
-		if (!col.pinned) {
-			const th = document.createElement('th');
-			th.innerText = col.name || col;
-			tr.appendChild(th);
-		}
-	});
-	const thead = document.createElement('thead');
-	thead.appendChild(tr);
-	table.appendChild(thead);
-
-	// create tbody
-	const tbody = document.createElement('tbody');
-	tbody.contentEditable = 'plaintext-only';
-	values.forEach(v => {
-		createRow(tbody, colDefs, v);
-	});
-	table.appendChild(tbody);
-
-	return table;
-}
-
-/**
- * @param {Array<string>} colDefs
- * @param {Array<string>} pinnedColumns
- * @param {Array<Object>} values
- * @returns {HTMLElement}
- */
-const createRowHeader = (colDefs, values) => {
-	const table = document.createElement('table');
-	const thead = document.createElement('thead');
-	const tr = document.createElement('tr');
-	colDefs.forEach(col => {
-		if (col.pinned) {
-			const th = document.createElement('th');
-			th.innerText = col.name;
-			tr.appendChild(th);
-		}
-	});
-	thead.appendChild(tr);
-	table.appendChild(thead);
-
-	const tbody = document.createElement('tbody');
-	values.forEach(value => {
-		const tr = document.createElement('tr');
-		colDefs.forEach(col => {
-			if (col.pinned) {
-				const td = document.createElement('th');
-				td.innerText = value[col[columnFieldProperty] || col[columnNameProperty]];
-				tr.appendChild(td);
-			}
-		});
-		tbody.appendChild(tr);
-	});
-	table.appendChild(tbody);
-	return table;
 }
 
 const currentCellClassName = 'current-cell';
@@ -192,6 +93,113 @@ class EditableTable {
 	 */
 
 	/**
+	 * @param {HTMLElement} tbody
+	 * @param {Array<string>} colDefs
+	 * @param {Array<string>} pinnedColumns
+	 * @param {Object} value
+	 */
+	createRow(tbody, colDefs, value) {
+		const tr = document.createElement('tr');
+		colDefs.forEach(col => {
+			if (!col.pinned) {
+				const td = document.createElement('td');
+				td.innerText = value[col[columnFieldProperty] || col[columnNameProperty] || col];
+				td.tabIndex = 0;
+				td.addEventListener('focus', evt => this.onfocus(evt));
+				td.addEventListener('blur', evt => this.onblur(evt));
+				td.addEventListener('pointerdown', evt => this.onPointerDown(evt));
+				td.addEventListener('click', evt => this.onClick(evt));
+				tr.appendChild(td);
+			}
+		});
+		tbody.appendChild(tr);
+	}
+
+	onPointerDown(evt) {
+		console.log('pointerdown', this.editing);
+		if (evt.target == this.currentCell && this.editing) {
+			return;
+		}
+		evt.preventDefault();
+	}
+
+	onClick(evt) {
+		console.log('click', evt.target.textContent, this.currentCell?.textContent);
+		if (this.currentCell == null || evt.target != this.currentCell) {
+			this.setCurrentCell(getParentElement(evt.target, 'td'));
+		}
+	}
+
+	/**
+	 * @param {HTMLElement} table
+	 * @param {Array<string>} colDefs
+	 * @param {Array<string>} pinnedColumns
+	 * @param {Array<Object>} values
+	 * @returns {HTMLElement}
+	 */
+	createMainColumns(colDefs, values) {
+		const table = document.createElement('table');
+
+		// create thead
+		const tr = document.createElement('tr');
+		colDefs.forEach(col => {
+			if (!col.pinned) {
+				const th = document.createElement('th');
+				th.innerText = col.name || col;
+				tr.appendChild(th);
+			}
+		});
+		const thead = document.createElement('thead');
+		thead.appendChild(tr);
+		table.appendChild(thead);
+
+		// create tbody
+		const tbody = document.createElement('tbody');
+		values.forEach(v => {
+			this.createRow(tbody, colDefs, v);
+		});
+		table.appendChild(tbody);
+
+		return table;
+	}
+
+	/**
+	 * @param {Array<string>} colDefs
+	 * @param {Array<string>} pinnedColumns
+	 * @param {Array<Object>} values
+	 * @returns {HTMLElement}
+	 */
+	createRowHeader(colDefs, values) {
+		const table = document.createElement('table');
+		const thead = document.createElement('thead');
+		const tr = document.createElement('tr');
+		colDefs.forEach(col => {
+			if (col.pinned) {
+				const th = document.createElement('th');
+				th.innerText = col.name;
+				tr.appendChild(th);
+			}
+		});
+		thead.appendChild(tr);
+		table.appendChild(thead);
+
+		const tbody = document.createElement('tbody');
+		values.forEach(value => {
+			const tr = document.createElement('tr');
+			colDefs.forEach(col => {
+				if (col.pinned) {
+					const td = document.createElement('th');
+					td.innerText = value[col[columnFieldProperty] || col[columnNameProperty]];
+					tr.appendChild(td);
+				}
+			});
+			tbody.appendChild(tr);
+		});
+		table.appendChild(tbody);
+		return table;
+	}
+
+	/**
 	 * @param {HTMLElement} container
 	 * @param {Array<string>} colDefs
 	 * @param {Array<string>} rowHeaders
@@ -199,39 +207,43 @@ class EditableTable {
 	 * @returns {HTMLElement}
 	 */
 	constructor(container, colDefs, values) {
+		/** @type {HTMLElement} */
 		this.container = container;
 		this.columns = colDefs;
 		this.values = values;
 		this.fields = colDefs.filter(v => !v.pinned).map(v => v[columnFieldProperty] || v[columnNameProperty] || v);
 		const rowheaderc = document.createElement('div');
-		const rowheader = createRowHeader(colDefs, values);
+		const rowheader = this.createRowHeader(colDefs, values);
 		rowheader.classList.add('row-header');
 		rowheaderc.appendChild(rowheader);
 		container.appendChild(rowheaderc);
 
 		const mainc = document.createElement('div');
 		mainc.classList.add('table-body');
-		const main = createMainColumns(colDefs, values);
+		const main = this.createMainColumns(colDefs, values);
 		mainc.appendChild(main);
 		container.appendChild(mainc);
 		container.classList.add('editable-table');
 
+		/** @type {ES_EDIT|ES_IMMEDIATE|ES_NONE} */
 		this.editState = ES_NONE;
+		/** @type {String} */
 		this.currentCellStore = '';
+		/** @type {HTMLElement} */
 		this.currentCell = null;
+		/** @type {Boolean} */
 		this.isComposing = false;
+		/** @type {HTMLElement} */
 		this.table = main;
 		this.values = values;
+		/** @type {String} Chromeのバグなのか、IMEで変換中に確定せずに別のセルをクリックすると、よくわからない文字列が入力される現象を回避するために使う。 */
+		this.lastComposedText = null;
 
 		this.onValueChanged = null;
 
 		main.addEventListener('keydown', evt => this.onKeyDown(evt));
 		main.addEventListener('compositionstart', evt => this.onCompositionStart(evt));
 		main.addEventListener('compositionend', evt => this.onCompositionEnd(evt));
-		document.addEventListener('selectionchange', evt => this.onSelectionChange(evt));
-		main.addEventListener('focusin', evt => this.onfocusin(evt));
-		main.addEventListener('focusout', evt => this.onfocusout(evt));
-		main.addEventListener('click', evt => this.onclick(evt));
 	}
 
 	/**
@@ -244,13 +256,7 @@ class EditableTable {
 		const nextrow = getNthSibling(currentrow, dir);
 		if (nextrow != null) {
 			const nextcell = getNthChild(nextrow, column);
-
-			const range = document.createRange();
-			range.setStart(nextcell, 0);
-			range.collapse(true);
-
-			sel.removeAllRanges();
-			sel.addRange(range);
+			this.setCurrentCell(nextcell);
 			return true;
 		} else {
 			return false;
@@ -265,12 +271,7 @@ class EditableTable {
 		const currentrow = this.currentCell.parentElement;
 		const nextcell = getNthChild(currentrow, getElementIndex(currentrow, this.currentCell) + dir);
 		if (nextcell != null) {
-			const range = document.createRange();
-			range.setStart(nextcell, 0);
-			range.collapse(true);
-
-			sel.removeAllRanges();
-			sel.addRange(range);
+			this.setCurrentCell(nextcell);
 			return true;
 		} else {
 			return false;
@@ -280,23 +281,42 @@ class EditableTable {
 	gotoFirstColumn() {
 		const sel = document.getSelection();
 		const currentrow = getParentElement(this.currentCell, 'tr');
-		const range = document.createRange();
-		range.setStart(currentrow.firstElementChild.firstChild, 0);
-		range.collapse(true);
-
-		sel.removeAllRanges();
-		sel.addRange(range);
+		this.setCurrentCell(currentrow.firstElementChild);
 	}
 
 	gotoLastColumn() {
 		const sel = document.getSelection();
 		const currentrow = getParentElement(this.currentCell, 'tr');
-		const range = document.createRange();
-		range.setStart(currentrow.lastElementChild.firstChild, 0);
-		range.collapse(true);
+		this.setCurrentCell(currentrow.lastElementChild);
+	}
 
-		sel.removeAllRanges();
-		sel.addRange(range);
+	/** @param {HTMLElement} elm */
+	setCurrentCell(elm) {
+		if (this.currentCell != null) {
+			this.currentCell.classList.remove(currentCellClassName);
+			if (this.currentCell != elm) {
+				if (this.editing) {
+					this.endEditing();
+				}
+			}
+			this.currentCell.contentEditable = false;
+		}
+		this.currentCell = elm;
+		if (elm != null) {
+			elm.contentEditable = true;
+			const sel = document.getSelection();
+			const range = document.createRange();
+
+			range.setStart(elm, 0);
+			range.collapse(true);
+
+			sel.removeAllRanges();
+			sel.addRange(range);
+
+			elm.classList.add(currentCellClassName);
+
+			elm.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
+		}
 	}
 
 	/** @param {Boolean} immediate */
@@ -338,7 +358,8 @@ class EditableTable {
 	endEditing() {
 		console.log('endEditing');
 
-		const newvalue = this.currentCell.textContent;
+		// Chromeで変換中の確定前に別セルをクリックした場合の減少への対処。直前の変換結果でセルの内容を上書きする。
+		const newvalue = this.lastComposedText ?? this.currentCell.textContent;
 		const oldvalue = this.currentCellStore;
 		if (newvalue !== oldvalue) {
 			console.log('changed');
@@ -347,13 +368,15 @@ class EditableTable {
 			const tbody = getParentElement(row, 'tbody');
 			const rowindex = getElementIndex(tbody, row);
 
-			//console.log(rowindex, columnindex);
 			const value = this.values[rowindex];
 			const field = this.fields[columnindex];
 			this.onValueChanged && this.onValueChanged(value, field, rowindex, columnindex, newvalue, oldvalue);
 			// TODO 返り値をチェックしてfalueならバリデーション失敗
 		}
 
+		this.currentCell.textContent = newvalue;
+
+		this.lastComposedText = null;
 		this.currentCellStore = '';
 		this.editState = ES_NONE;
 		this.table.classList.remove(cellEditingClassName);
@@ -365,7 +388,7 @@ class EditableTable {
 
 	/** @param {KeyboardEvent} evt*/
 	onKeyDown(evt) {
-		console.log(this.editState, this.editing, evt.key, evt.code);
+		console.log(this.isComposing, this.editing, evt.key, evt.code);
 
 		switch (this.editState) {
 			case ES_EDIT: // 編集モードの処理
@@ -380,6 +403,7 @@ class EditableTable {
 					// 変換中の残りの処理はブラウザまかせ
 					return;
 				}
+				this.lastComposedText = null;
 
 				if (evt.key.length === 1) { // 印字可能なキー
 					// 入力されたキーのDOMツリーへの挿入はブラウザまかせ
@@ -461,6 +485,7 @@ class EditableTable {
 					// 変換中の残りの処理はブラウザまかせ
 					return;
 				}
+				this.lastComposedText = null;
 
 				if (evt.key.length === 1) { // 印字可能なキー
 					// 入力されたキーのDOMツリーへの挿入はブラウザまかせ
@@ -561,39 +586,10 @@ class EditableTable {
 		}
 	}
 
-	onSelectionChange(evt) {
-		const sel = document.getSelection();
-
-		const targetTable = getParentElement(sel.focusNode, 'table');
-		if (targetTable == null || targetTable != this.table) {
-			return;
-		}
-
-		if (this.isComposing) {
-			return;
-		}
-
-		console.log('onSelectionChange', this.editState, this.editing, sel.focusOffset);
-
-		const targetCell = getParentElement(sel.focusNode, 'td');
-		if (this.currentCell != null) {
-			if (this.currentCell != targetCell) {
-				if (this.editing) {
-					this.endEditing();
-				}
-			}
-			this.currentCell.classList.remove(currentCellClassName);
-		}
-		if (targetCell != null) {
-			targetCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-			targetCell.classList.add(currentCellClassName);
-		}
-		this.currentCell = targetCell;
-	}
-
 	onCompositionStart() {
 		console.log('composition start', this.editState, this.editing);
 		this.isComposing = true;
+		this.lastComposedText = null;
 		if (this.editState === ES_NONE) {
 			this.startEditing(true);
 		}
@@ -602,32 +598,18 @@ class EditableTable {
 	onCompositionEnd() {
 		console.log('composition end', this.editState, this.editing, this.currentCell.textContent);
 		this.isComposing = false;
+		// 変換が終わった時点でのセルの内容を保存しておく。
+		this.lastComposedText = this.currentCell.textContent;
 	}
 
-	onfocusin(evt) {
-		console.log('focusin');
+	onfocus(evt) {
+		console.log('focusin', this.currentCell);
+		this.setCurrentCell(evt.target);
 	}
 
-	onfocusout(evt) {
-		console.log('focusout', this.currentCell.textContent);
-		if (this.editing) {
-			this.endEditing();
-		}
-	}
-
-	onclick(evt) {
-		console.log('onclick', this.editing);
-		if (!this.editing) {
-			const cell = getParentElement(evt.target, 'td');
-			const sel = document.getSelection();
-			const range = document.createRange();
-			range.setStart(cell, 0);
-			range.collapse(true);
-
-			sel.removeAllRanges();
-			sel.addRange(range);
-		}
-		// TODO マウスドラッグによる編集中セル内の選択
+	onblur(evt) {
+		console.log('focusout', this.currentCell?.textContent);
+		this.setCurrentCell(null);
 	}
 }
 
